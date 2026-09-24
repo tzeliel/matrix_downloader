@@ -163,9 +163,9 @@ except ImportError:
 # =========================================================
 def app_base_dir() -> str:
     """
-    Devuelve el directorio base de la aplicación:
-    - Si corre como .exe compilado (frozen): carpeta donde está el .exe.
-    - Si corre como script .py: carpeta donde está main.py.
+    Directorio base de la aplicación:
+    - Compilado (.exe, sys.frozen): carpeta donde está el .exe.
+    - Script .py: carpeta donde está main.py.
     """
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
@@ -174,9 +174,9 @@ def app_base_dir() -> str:
 
 def resource_path(relative_path: str) -> str:
     """
-    Ruta a un recurso embebido (ffmpeg.exe, iconos, etc.).
-    PyInstaller onefile descomprime los recursos en una carpeta temporal
-    (sys._MEIPASS) en tiempo de ejecución.
+    Ruta a un recurso embebido en el ejecutable (ffmpeg.exe, etc.).
+    PyInstaller --onefile descomprime los binarios añadidos con --add-binary
+    en una carpeta temporal (sys._MEIPASS) en tiempo de ejecución.
     """
     base_path = getattr(sys, "_MEIPASS", app_base_dir())
     return os.path.join(base_path, relative_path)
@@ -269,7 +269,7 @@ class MatrixDownloaderApp(tk.Tk):
         self.log_queue = queue.Queue()
         self.entries = {}          # video_id -> dict(title, duration, checked, row_iid)
         self.playlist_title = None
-        self.output_dir = os.path.join(app_base_dir(), "descargas")
+        self.output_dir = os.path.join(os.getcwd(), "descargas")
         os.makedirs(self.output_dir, exist_ok=True)
         self.is_downloading = False
         self.stop_requested = False
@@ -282,22 +282,37 @@ class MatrixDownloaderApp(tk.Tk):
 
     # -----------------------------------------------------
     def _check_dependencies(self):
-        # 1) Busca un ffmpeg.exe embebido junto al .exe / en el bundle de PyInstaller
-        bundled_ffmpeg = resource_path("ffmpeg.exe")
-        if os.path.isfile(bundled_ffmpeg):
-            ffmpeg_dir = os.path.dirname(bundled_ffmpeg)
-            os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
-            self.ffmpeg_ok = True
-        else:
-            # 2) Si no hay ffmpeg embebido, comprueba el PATH del sistema
-            self.ffmpeg_ok = shutil.which("ffmpeg") is not None
-
+        self.ffmpeg_path = self._locate_ffmpeg()
+        self.ffmpeg_ok = self.ffmpeg_path is not None
         if yt_dlp is None:
             messagebox.showerror(
                 "错误 // ERROR",
                 "No se encontró el paquete 'yt-dlp'.\n\n"
                 "Instálalo con:\n    pip install -r requirements.txt"
             )
+
+    @staticmethod
+    def _locate_ffmpeg():
+        """
+        Busca ffmpeg en este orden:
+        1. Embebido dentro del propio .exe (PyInstaller --add-binary), la
+           forma normal cuando se usa el ejecutable portable compilado.
+        2. Un ffmpeg.exe/ffmpeg colocado a mano junto al .exe o a main.py
+           (permite sustituirlo sin recompilar).
+        3. El PATH del sistema (caso de ejecutar desde código fuente).
+        Devuelve la ruta completa al binario, o None si no se encuentra.
+        """
+        exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+
+        embedded = resource_path(exe_name)
+        if os.path.isfile(embedded):
+            return embedded
+
+        beside_app = os.path.join(app_base_dir(), exe_name)
+        if os.path.isfile(beside_app):
+            return beside_app
+
+        return shutil.which("ffmpeg")
 
     # -----------------------------------------------------
     def _build_style(self):
@@ -665,6 +680,8 @@ class MatrixDownloaderApp(tk.Tk):
             "progress_hooks": [self._progress_hook],
             "postprocessor_hooks": [],
         }
+        if self.ffmpeg_path:
+            opts["ffmpeg_location"] = self.ffmpeg_path
 
         if is_video:
             height_map = {
