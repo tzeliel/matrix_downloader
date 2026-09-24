@@ -18,29 +18,43 @@ echo El archivo MatrixDownloader.exe final no necesitara nada mas.
 echo.
 pause
 
+set "PYCMD="
+
 python --version >nul 2>nul
-if errorlevel 1 goto no_python
+if not errorlevel 1 set "PYCMD=python"
+
+if not defined PYCMD (
+    py -3 --version >nul 2>nul
+    if not errorlevel 1 set "PYCMD=py -3"
+)
+
+if not defined PYCMD goto no_python
+echo.
+echo Python detectado via: %PYCMD%
 goto have_python
 
 :no_python
 echo.
 echo [ERROR] No se encontro un Python funcional en el PATH.
 echo.
-echo Causa mas probable: no tienes Python instalado de verdad y Windows
-echo esta mostrando su "alias" ficticio de la Microsoft Store en su lugar.
-echo Por eso a veces "python" parece existir pero falla al ejecutarse
-echo con el mensaje "no se reconoce como un comando".
+echo Se han probado tanto "python" como el lanzador "py" y ninguno
+echo funciona. Causa mas probable: el alias ficticio de la Microsoft
+echo Store sigue activo y tapa al Python real en el PATH ^(esto pasa
+echo AUNQUE ya tengas Python instalado correctamente^).
 echo.
 echo Solucion:
-echo   1. Instala Python desde https://www.python.org/downloads/
-echo      ^(NO desde la Microsoft Store^), marcando la casilla
-echo      "Add python.exe to PATH" durante la instalacion.
-echo   2. Si ya lo instalaste asi y el problema persiste, desactiva el
-echo      alias en conflicto: Configuracion de Windows ^> Aplicaciones ^>
-echo      Configuracion avanzada de aplicaciones ^> Alias de ejecucion de
-echo      aplicaciones, y desactiva "python.exe" y "python3.exe".
-echo   3. Cierra esta ventana, abre una terminal NUEVA (para que el PATH
-echo      se actualice) y vuelve a ejecutar este script.
+echo   1. Configuracion de Windows ^> Aplicaciones ^> Configuracion
+echo      avanzada de aplicaciones ^> Alias de ejecucion de aplicaciones.
+echo      Desactiva los interruptores de "python.exe" y "python3.exe".
+echo   2. Si aun no tienes Python instalado, hazlo desde
+echo      https://www.python.org/downloads/ ^(NO desde la Microsoft
+echo      Store^), marcando la casilla "Add python.exe to PATH".
+echo   3. Cierra esta ventana, abre una terminal NUEVA (el PATH no se
+echo      actualiza en una ya abierta) y comprueba con:
+echo          where python
+echo      Debe apuntar a una ruta real ^(Program Files o
+echo      AppData\Local\Programs\Python^), nunca a WindowsApps.
+echo   4. Vuelve a ejecutar este script.
 echo.
 pause
 exit /b 1
@@ -61,15 +75,15 @@ exit /b 1
 :extract_ok
 echo.
 echo [2/6] Creando entorno virtual...
-if not exist venv_build python -m venv venv_build
+if not exist venv_build %PYCMD% -m venv venv_build
 if not exist venv_build\Scripts\python.exe goto venv_failed
 goto venv_ok
 
 :venv_failed
 echo.
 echo [ERROR] No se pudo crear el entorno virtual (carpeta venv_build).
-echo Esto casi siempre significa que el "python" detectado en el PATH
-echo no es una instalacion real de Python (ver el aviso sobre el alias
+echo Esto casi siempre significa que "%PYCMD%" no es una instalacion
+echo real de Python que funcione del todo (ver el aviso sobre el alias
 echo de la Microsoft Store un poco mas arriba en esta misma ventana).
 echo.
 echo Instala Python desde https://www.python.org/downloads/, abre una
